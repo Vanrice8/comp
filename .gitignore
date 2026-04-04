@@ -3,3 +3,6 @@ node_modules/
 *.db
 *.db-shm
 *.db-wal
+!comp.db
+__pycache__/
+.streamlit/secrets.toml
