@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 
-st.set_page_config(page_title="Komp Tracker", page_icon="⏱", layout="wide")
+st.set_page_config(page_title="The Incident Managers Sigma Grindset Log", page_icon="⏱", layout="wide")
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_FILE = Path(os.environ.get("DB_PATH", BASE_DIR / "comp.db"))
@@ -1032,7 +1032,7 @@ def login_screen() -> None:
             """
             <div class="kt-login-card">
               <div class="kt-login-logo">⏱</div>
-              <div class="kt-login-title">Komp Tracker</div>
+              <div class="kt-login-title"><a href="https://www.youtube.com/watch?v=EDqnADGdagc&t=15" target="_blank" style="color:inherit;text-decoration:none;">The Incident Managers Sigma Grindset Log</a></div>
               <div class="kt-login-sub">Enter the team password to log in</div>
             </div>
             """,
@@ -1086,7 +1086,7 @@ def add_entry_form(active_members: list[dict]) -> None:
         return
 
     options = {member_label(row): row["id"] for row in active_members}
-    period_options = ["— Select on-call period (optional) —"] + past_beredskap_periods()
+    period_options = ["— Select on-call period (optional) —"] + list(reversed(past_beredskap_periods()))
     with st.form("entry_form", clear_on_submit=True):
         chosen_label = st.selectbox("Person", list(options.keys()))
         entry_type = st.radio("Type", ["Earned", "Used"], horizontal=True)
@@ -1411,7 +1411,7 @@ def main() -> None:
     st.markdown(
         """
         <div class="kt-hero">
-          <h1>Komp Tracker</h1>
+          <h1><a href="https://www.youtube.com/watch?v=EDqnADGdagc&t=15" target="_blank" style="color:inherit;text-decoration:none;">The Incident Managers Sigma Grindset Log</a></h1>
         </div>
         """,
         unsafe_allow_html=True,
