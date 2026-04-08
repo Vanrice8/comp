@@ -1037,8 +1037,24 @@ def get_login_bg_css() -> str:
     #login-screen-bg {{
         position: fixed;
         inset: 0;
-        background: url("data:image/png;base64,{b64}") center center / cover no-repeat;
         z-index: 0;
+        overflow: hidden;
+    }}
+    #login-screen-bg::before {{
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: url("data:image/png;base64,{b64}") center -30px / 130% auto no-repeat;
+    }}
+    #login-screen-bg::after {{
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to bottom,
+            transparent 25%,
+            rgba(13,27,46,0.6) 45%,
+            #0d1b2e 62%
+        );
     }}
     .kt-login-shell {{
         position: relative;
