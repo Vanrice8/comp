@@ -1613,13 +1613,13 @@ def render_debt_tab(active_members: list[dict]) -> None:
         member_names = list(options.keys())
 
         coverage_type = st.radio("Coverage type", ["Hours", "Days"], horizontal=True, key="debt_coverage_type")
+        start_date = st.date_input("From date", key="debt_start_date")
+        multi_day  = st.checkbox("Spans multiple days (add end date)", key="debt_multi_day")
+        end_date   = st.date_input("To date", key="debt_end_date") if multi_day else None
 
         with st.form("debt_form", clear_on_submit=True):
             creditor_label = st.selectbox("Who covered? (is owed)", member_names)
             debtor_label   = st.selectbox("Covered for whom? (owes)", member_names)
-            start_date     = st.date_input("From date")
-            multi_day      = st.checkbox("Spans multiple days (add end date)")
-            end_date       = st.date_input("To date", value=None)
 
             if st.session_state.get("debt_coverage_type", "Hours") == "Hours":
                 hours_text = st.text_input("Hours (HH:MM)", placeholder="8:30")
@@ -1635,7 +1635,7 @@ def render_debt_tab(active_members: list[dict]) -> None:
             if creditor_label == debtor_label:
                 st.error("A member cannot owe themselves.")
             else:
-                date_to = end_date.isoformat() if multi_day and end_date and end_date > start_date else None
+                date_to = end_date.isoformat() if end_date and end_date > start_date else None
                 mins = None
                 d_count = None
                 if coverage_type == "Hours":
