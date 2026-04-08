@@ -1236,13 +1236,12 @@ def inject_theme(theme_mode: str) -> None:
 
 
 def render_metric_card(label: str, value: str, sub: str = "") -> None:
-    sub_html = f'<div class="kt-metric-sub">{sub}</div>' if sub else ""
     st.markdown(
         f"""
         <div class="kt-metric">
           <div class="kt-metric-label">{label}</div>
           <div class="kt-metric-value">{value}</div>
-          {sub_html}
+          <div class="kt-metric-sub">{sub if sub else "&nbsp;"}</div>
         </div>
         """,
         unsafe_allow_html=True,
