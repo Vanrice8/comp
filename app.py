@@ -958,7 +958,7 @@ def inject_theme(theme_mode: str) -> None:
 
         .kt-login-tagline {
           color: var(--kt-muted);
-          font-size: 0.95rem;
+          font-size: 0.88rem;
           margin-top: 1.2rem;
           line-height: 1.65;
           text-align: center;
@@ -1060,7 +1060,7 @@ def login_screen() -> None:
               <div class="kt-login-sub">Enter the team password to log in</div>
               <div class="kt-login-tagline">
                 Track <strong>your</strong> overtime earnings...<br>
-                and choose when to cash out those sweet, sweet on-call hours!
+                and cash out those sweet, sweet on-call hours!
               </div>
             </div>
             """,
