@@ -947,13 +947,15 @@ def inject_theme(theme_mode: str) -> None:
         }
 
         .kt-login-card {
-          background: var(--kt-surface);
+          background: rgba(15, 25, 50, 0.82);
+          backdrop-filter: blur(10px);
           border-radius: 20px;
           box-shadow: var(--kt-shadow-lg);
           padding: 2.5rem 2.25rem;
           width: 100%;
           max-width: 420px;
           text-align: center;
+          border: 1px solid rgba(255,255,255,0.1);
         }
 
         .kt-login-logo {
@@ -1024,7 +1026,31 @@ def render_metric_card(label: str, value: str) -> None:
     )
 
 
+def get_login_bg_css() -> str:
+    img_path = Path(__file__).resolve().parent / "4ff6d3e9-19e4-47a4-8399-655389cb9225.png"
+    if not img_path.exists():
+        return ""
+    import base64
+    b64 = base64.b64encode(img_path.read_bytes()).decode()
+    return f"""
+    <style>
+    #login-screen-bg {{
+        position: fixed;
+        inset: 0;
+        background: url("data:image/png;base64,{b64}") center center / cover no-repeat;
+        z-index: 0;
+    }}
+    .kt-login-shell {{
+        position: relative;
+        z-index: 1;
+    }}
+    </style>
+    <div id="login-screen-bg"></div>
+    """
+
+
 def login_screen() -> None:
+    st.markdown(get_login_bg_css(), unsafe_allow_html=True)
     st.markdown("<div style='height:8vh;'></div>", unsafe_allow_html=True)
     left, center, right = st.columns([1.35, 1, 1.35])
     with center:
@@ -1032,7 +1058,7 @@ def login_screen() -> None:
             """
             <div class="kt-login-card">
               <div class="kt-login-logo">⏱</div>
-              <div class="kt-login-title"><a href="https://www.youtube.com/watch?v=EDqnADGdagc&t=15" target="_blank" style="color:inherit;text-decoration:none;">The Incident Managers Sigma Grindset Log</a></div>
+              <div class="kt-login-title">The Incident Managers Sigma Grindset Log</div>
               <div class="kt-login-sub">Enter the team password to log in</div>
             </div>
             """,
