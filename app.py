@@ -721,7 +721,7 @@ def mins_to_hhmm(minutes: int | None) -> str:
     minutes = abs(minutes)
     hours = minutes // 60
     mins = minutes % 60
-    return f"{sign}{hours}:{mins:02d}"
+    return f"{sign}{hours:02d}:{mins:02d}"
 
 
 def format_date(iso_date: str | None) -> str:
@@ -734,18 +734,43 @@ def format_date(iso_date: str | None) -> str:
 
 
 def parse_hhmm(value: str) -> int | None:
-    cleaned = value.strip().replace(",", ":").replace(".", ":")
-    parts = cleaned.split(":")
-    if len(parts) != 2:
+    raw = value.strip()
+    if not raw:
         return None
+
+    # HH:MM format  e.g. 8:30, 01:00, 0:30
+    if ":" in raw:
+        parts = raw.split(":")
+        if len(parts) != 2:
+            return None
+        try:
+            hours = int(parts[0])
+            mins  = int(parts[1])
+        except ValueError:
+            return None
+        if hours < 0 or mins < 0 or mins >= 60:
+            return None
+        return hours * 60 + mins
+
+    # Decimal format  e.g. 1.5, 0.5, 1,5, 0,5
+    normalized = raw.replace(",", ".")
+    if "." in normalized:
+        try:
+            hours_f = float(normalized)
+        except ValueError:
+            return None
+        if hours_f < 0:
+            return None
+        return round(hours_f * 60)
+
+    # Plain integer  e.g. 1, 8  → treated as whole hours
     try:
-        hours = int(parts[0])
-        minutes = int(parts[1])
+        hours = int(raw)
     except ValueError:
         return None
-    if hours < 0 or minutes < 0 or minutes >= 60:
+    if hours < 0:
         return None
-    return hours * 60 + minutes
+    return hours * 60
 
 
 def past_beredskap_periods(n: int = 52) -> list[str]:
