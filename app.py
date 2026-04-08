@@ -3,7 +3,7 @@ import sqlite3
 import json
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib import error, parse, request
 
@@ -600,6 +600,28 @@ def parse_hhmm(value: str) -> int | None:
     return hours * 60 + minutes
 
 
+def past_beredskap_periods(n: int = 52) -> list[str]:
+    """Return last n completed Friday→Thursday on-call periods as comment strings."""
+    today = date.today()
+    # Find most recent completed Thursday
+    days_since_thursday = (today.weekday() - 3) % 7
+    last_thursday = today - timedelta(days=days_since_thursday)
+    # If today IS Thursday, that period just ended — include it
+    if days_since_thursday == 0:
+        last_thursday = today
+
+    periods = []
+    for i in range(n):
+        period_end = last_thursday - timedelta(weeks=i)
+        period_start = period_end - timedelta(days=6)  # Friday
+        if period_end >= today and days_since_thursday != 0:
+            continue
+        start_str = f"{period_start.day}/{period_start.month}"
+        end_str = f"{period_end.day}/{period_end.month}"
+        periods.append(f"Intjänat under beredskap {start_str}–{end_str}")
+    return periods
+
+
 def member_label(row: dict) -> str:
     nickname = row["nickname"]
     if nickname and nickname != row["name"]:
@@ -1064,12 +1086,15 @@ def add_entry_form(active_members: list[dict]) -> None:
         return
 
     options = {member_label(row): row["id"] for row in active_members}
+    period_options = ["— Select on-call period (optional) —"] + past_beredskap_periods()
     with st.form("entry_form", clear_on_submit=True):
         chosen_label = st.selectbox("Person", list(options.keys()))
         entry_type = st.radio("Type", ["Earned", "Used"], horizontal=True)
         date_value = st.date_input("Date")
         hours_text = st.text_input("Hours (HH:MM)", placeholder="8:30")
-        comment = st.text_input("Comment (optional)")
+        selected_period = st.selectbox("On-call period", period_options)
+        default_comment = "" if selected_period.startswith("—") else selected_period
+        comment = st.text_input("Comment (optional)", value=default_comment)
         submitted = st.form_submit_button("Save entry", use_container_width=True)
 
     if submitted:
