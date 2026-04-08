@@ -119,6 +119,18 @@ def init_sqlite() -> None:
               created_at TEXT DEFAULT (datetime('now')),
               FOREIGN KEY (member_id) REFERENCES members(id)
             );
+
+            CREATE TABLE IF NOT EXISTS debts (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              debtor_id INTEGER NOT NULL,
+              creditor_id INTEGER NOT NULL,
+              minutes INTEGER NOT NULL,
+              date TEXT NOT NULL,
+              comment TEXT,
+              created_at TEXT DEFAULT (datetime('now')),
+              FOREIGN KEY (debtor_id) REFERENCES members(id),
+              FOREIGN KEY (creditor_id) REFERENCES members(id)
+            );
             """
         )
 
@@ -299,9 +311,19 @@ def supabase_all_entries() -> list[dict]:
     return rows or []
 
 
+@st.cache_data(ttl=60)
+def supabase_all_debts() -> list[dict]:
+    rows = supabase_request(
+        "GET", "debts",
+        params={"select": "id,debtor_id,creditor_id,minutes,date,comment,created_at"},
+    )
+    return rows or []
+
+
 def invalidate_cache() -> None:
     supabase_all_members.clear()
     supabase_all_entries.clear()
+    supabase_all_debts.clear()
 
 
 def all_members_for_export() -> list[dict]:
@@ -517,6 +539,132 @@ def supabase_delete_entry(entry_id: int) -> None:
         params={"id": f"eq.{entry_id}"},
         prefer="return=minimal",
     )
+
+
+def sqlite_load_debts() -> list[dict]:
+    conn = sqlite_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT d.id, d.minutes, d.date, d.comment, d.created_at,
+                   d.debtor_id, d.creditor_id,
+                   md.name AS debtor_name, md.nickname AS debtor_nickname,
+                   mc.name AS creditor_name, mc.nickname AS creditor_nickname
+            FROM debts d
+            JOIN members md ON md.id = d.debtor_id
+            JOIN members mc ON mc.id = d.creditor_id
+            ORDER BY d.date DESC, d.created_at DESC
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def sqlite_add_debt(debtor_id: int, creditor_id: int, minutes: int, date_value: str, comment: str | None) -> None:
+    conn = sqlite_connection()
+    try:
+        conn.execute(
+            "INSERT INTO debts (debtor_id, creditor_id, minutes, date, comment) VALUES (?,?,?,?,?)",
+            (debtor_id, creditor_id, minutes, date_value, comment),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sqlite_delete_debt(debt_id: int) -> None:
+    conn = sqlite_connection()
+    try:
+        conn.execute("DELETE FROM debts WHERE id = ?", (debt_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sqlite_debt_balances() -> dict[int, int]:
+    """Returns net debt minutes per member: positive = owed to them, negative = they owe."""
+    conn = sqlite_connection()
+    try:
+        rows = conn.execute("SELECT debtor_id, creditor_id, minutes FROM debts").fetchall()
+    finally:
+        conn.close()
+    balances: dict[int, int] = {}
+    for row in rows:
+        balances[row["creditor_id"]] = balances.get(row["creditor_id"], 0) + row["minutes"]
+        balances[row["debtor_id"]]   = balances.get(row["debtor_id"],   0) - row["minutes"]
+    return balances
+
+
+def supabase_load_debts() -> list[dict]:
+    members = {int(r["id"]): r for r in supabase_all_members()}
+    raw = supabase_all_debts()
+    result = []
+    for d in raw:
+        debtor   = members.get(int(d["debtor_id"]),   {})
+        creditor = members.get(int(d["creditor_id"]), {})
+        result.append({
+            "id": int(d["id"]),
+            "debtor_id":        int(d["debtor_id"]),
+            "creditor_id":      int(d["creditor_id"]),
+            "minutes":          int(d["minutes"]),
+            "date":             d["date"],
+            "comment":          d.get("comment") or "",
+            "created_at":       d.get("created_at") or "",
+            "debtor_name":      debtor.get("name", ""),
+            "debtor_nickname":  debtor.get("nickname"),
+            "creditor_name":    creditor.get("name", ""),
+            "creditor_nickname":creditor.get("nickname"),
+        })
+    result.sort(key=lambda r: (r["date"], r["created_at"]), reverse=True)
+    return result
+
+
+def supabase_add_debt(debtor_id: int, creditor_id: int, minutes: int, date_value: str, comment: str | None) -> None:
+    supabase_request(
+        "POST", "debts",
+        body={"debtor_id": debtor_id, "creditor_id": creditor_id,
+              "minutes": minutes, "date": date_value, "comment": comment,
+              "created_at": datetime.now(timezone.utc).isoformat()},
+        prefer="return=minimal",
+    )
+
+
+def supabase_delete_debt(debt_id: int) -> None:
+    supabase_request("DELETE", "debts", params={"id": f"eq.{debt_id}"}, prefer="return=minimal")
+
+
+def supabase_debt_balances() -> dict[int, int]:
+    balances: dict[int, int] = {}
+    for d in supabase_all_debts():
+        cid = int(d["creditor_id"])
+        did = int(d["debtor_id"])
+        m   = int(d["minutes"])
+        balances[cid] = balances.get(cid, 0) + m
+        balances[did] = balances.get(did, 0) - m
+    return balances
+
+
+def load_debts() -> list[dict]:
+    return supabase_load_debts() if using_supabase() else sqlite_load_debts()
+
+
+def add_debt(debtor_id: int, creditor_id: int, minutes: int, date_value: str, comment: str | None) -> None:
+    if using_supabase():
+        supabase_add_debt(debtor_id, creditor_id, minutes, date_value, comment)
+    else:
+        sqlite_add_debt(debtor_id, creditor_id, minutes, date_value, comment)
+
+
+def delete_debt(debt_id: int) -> None:
+    if using_supabase():
+        supabase_delete_debt(debt_id)
+    else:
+        sqlite_delete_debt(debt_id)
+
+
+def debt_balances() -> dict[int, int]:
+    return supabase_debt_balances() if using_supabase() else sqlite_debt_balances()
 
 
 def load_members(is_archived: int) -> list[dict]:
@@ -1142,7 +1290,7 @@ def add_entry_form(active_members: list[dict]) -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def render_member_list(title: str, members: list[dict], archived: bool = False) -> None:
+def render_member_list(title: str, members: list[dict], archived: bool = False, balances: dict | None = None) -> None:
     card_class = "kt-card archive" if archived else "kt-card"
     st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
     st.markdown(f'<div class="kt-card-label">{title}</div>', unsafe_allow_html=True)
@@ -1156,6 +1304,12 @@ def render_member_list(title: str, members: list[dict], archived: bool = False) 
         label = member_label(row)
         balance = mins_to_hhmm(row["balance_minutes"])
         real_name = row["name"]
+        net_debt = (balances or {}).get(int(row["id"]), 0)
+        debt_str = ""
+        if not archived and net_debt != 0:
+            sign = "+" if net_debt > 0 else ""
+            debt_color = "#49d7a2" if net_debt > 0 else "#ff8a8a"
+            debt_str = f'<span style="font-size:0.75rem;font-weight:600;color:{debt_color};margin-left:0.5rem;" title="Coverage debt balance">{sign}{mins_to_hhmm(net_debt)} debt</span>'
         sub = "" if archived else (real_name if label != real_name else "")
         row_cols = st.columns([5.3, 1.1, 1.9], gap="medium")
         row_cols[0].markdown(
@@ -1163,7 +1317,7 @@ def render_member_list(title: str, members: list[dict], archived: bool = False) 
             <div class="kt-member-main">
               <span class="kt-member-dot" style="background:{'#94a3b8' if archived else colors[index % len(colors)]}"></span>
               <div class="kt-member-text">
-                <span>{label}</span>
+                <span>{label}{debt_str}</span>
                 {f'<div class="kt-member-sub">{sub}</div>' if sub else ''}
               </div>
             </div>
@@ -1198,14 +1352,14 @@ def render_member_list(title: str, members: list[dict], archived: bool = False) 
             if row_cols[2].button("View", key=f"history_{row['id']}", use_container_width=True):
                 if (
                     st.session_state.get("selected_member_id") == row["id"]
-                    and st.session_state.get("active_tab") == "Manage"
+                    and st.session_state.get("active_tab") == "Tracker"
                 ):
                     st.session_state.selected_member_id = None
                     st.session_state.selected_member_name = None
                 else:
                     st.session_state.selected_member_id = row["id"]
                     st.session_state.selected_member_name = label
-                    st.session_state.active_tab = "Manage"
+                    st.session_state.active_tab = "Tracker"
                 st.rerun()
         st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1380,6 +1534,98 @@ def build_komp_xlsx() -> bytes:
     return buf.getvalue()
 
 
+def render_debt_tab(active_members: list[dict]) -> None:
+    # ── Add debt form ────────────────────────────────────────────────────────
+    st.markdown('<div class="kt-card">', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">Log coverage debt</div>', unsafe_allow_html=True)
+    if not active_members or len(active_members) < 2:
+        st.info("Need at least 2 active members to log a debt.")
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        options = {member_label(row): row["id"] for row in active_members}
+        member_names = list(options.keys())
+        with st.form("debt_form", clear_on_submit=True):
+            creditor_label = st.selectbox("Who covered? (is owed)", member_names, key="debt_creditor")
+            debtor_label   = st.selectbox("Covered for whom? (owes)", member_names, key="debt_debtor")
+            date_value     = st.date_input("Date")
+            hours_text     = st.text_input("Hours (HH:MM)", placeholder="8:30")
+            comment        = st.text_input("Comment (optional)")
+            submitted      = st.form_submit_button("Save debt", use_container_width=True)
+        if submitted:
+            if creditor_label == debtor_label:
+                st.error("A member cannot owe themselves.")
+            else:
+                mins = parse_hhmm(hours_text)
+                if not mins:
+                    st.error("Enter hours in HH:MM format, e.g. 8:30.")
+                else:
+                    try:
+                        add_debt(options[debtor_label], options[creditor_label], mins,
+                                 date_value.isoformat(), comment.strip() or None)
+                        invalidate_cache()
+                        st.success("Debt logged.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not save debt: {exc}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Debt balances ────────────────────────────────────────────────────────
+    balances = debt_balances()
+    st.markdown('<div class="kt-card">', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">Coverage balances</div>', unsafe_allow_html=True)
+    member_map = {int(m["id"]): m for m in active_members}
+    sorted_members = sorted(active_members, key=lambda m: balances.get(int(m["id"]), 0), reverse=True)
+    for row in sorted_members:
+        net = balances.get(int(row["id"]), 0)
+        label = member_label(row)
+        sign = "+" if net > 0 else ""
+        bal_class = "pos" if net > 0 else ("neg" if net < 0 else "")
+        cols = st.columns([5, 2])
+        cols[0].markdown(f'<div class="kt-member-main"><div class="kt-member-text"><span>{label}</span></div></div>', unsafe_allow_html=True)
+        cols[1].markdown(f'<div class="kt-balance {bal_class}">{sign}{mins_to_hhmm(net)}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Debt history ─────────────────────────────────────────────────────────
+    debts = load_debts()
+    st.markdown('<div class="kt-card">', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">Debt history</div>', unsafe_allow_html=True)
+    if not debts:
+        st.info("No debts logged yet.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    for d in debts:
+        creditor_nick = d.get("creditor_nickname") or d["creditor_name"]
+        debtor_nick   = d.get("debtor_nickname")   or d["debtor_name"]
+        cols = st.columns([1.1, 0.8, 2.4, 0.8])
+        cols[0].markdown(f'<div class="kt-entry-date">{format_date(d["date"])}</div>', unsafe_allow_html=True)
+        cols[1].markdown(f'<div class="kt-entry-amount pos">+{mins_to_hhmm(d["minutes"])}</div>', unsafe_allow_html=True)
+        cols[2].markdown(
+            f'<div class="kt-entry-comment"><b>{creditor_nick}</b> covered for <b>{debtor_nick}</b>'
+            f'{(" — " + d["comment"]) if d.get("comment") else ""}</div>',
+            unsafe_allow_html=True,
+        )
+        pending = st.session_state.get("pending_delete_debt_id")
+        if pending == d["id"]:
+            dc = st.columns([3, 0.5, 0.5])
+            dc[0].markdown("**Delete this debt?**")
+            if dc[1].button("Yes", key=f"debt_del_confirm_{d['id']}", use_container_width=True):
+                delete_debt(d["id"])
+                st.session_state.pending_delete_debt_id = None
+                invalidate_cache()
+                st.rerun()
+            if dc[2].button("No", key=f"debt_del_cancel_{d['id']}", use_container_width=True):
+                st.session_state.pending_delete_debt_id = None
+                st.rerun()
+        else:
+            del_col = st.columns([4.3, 1])[1]
+            if del_col.button("Delete", key=f"debt_del_{d['id']}", use_container_width=True):
+                st.session_state.pending_delete_debt_id = d["id"]
+                st.rerun()
+        st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def sidebar() -> None:
     theme_options = ["🌙 Dark", "☀️ Light"]
     theme_idx = 0 if st.session_state.get("theme_mode", "dark") == "dark" else 1
@@ -1413,8 +1659,10 @@ def main() -> None:
         st.session_state.pending_archive_id = None
     if "pending_delete_id" not in st.session_state:
         st.session_state.pending_delete_id = None
+    if "pending_delete_debt_id" not in st.session_state:
+        st.session_state.pending_delete_debt_id = None
     if "active_tab" not in st.session_state:
-        st.session_state.active_tab = "Manage"
+        st.session_state.active_tab = "Tracker"
     if "theme_mode" not in st.session_state:
         st.session_state.theme_mode = "dark"
     if "komp_xlsx" not in st.session_state:
@@ -1450,16 +1698,17 @@ def main() -> None:
 
     selected_tab = st.segmented_control(
         "View",
-        ["Manage", "Archive"],
+        ["Tracker", "Debt", "Archive"],
         selection_mode="single",
-        default=st.session_state.get("active_tab", "Manage"),
+        default=st.session_state.get("active_tab", "Tracker"),
         key="active_tab_selector",
         label_visibility="collapsed",
     )
     st.session_state.active_tab = selected_tab
 
-    if selected_tab == "Manage":
-        render_member_list("Active members", active_members, archived=False)
+    if selected_tab == "Tracker":
+        d_balances = debt_balances()
+        render_member_list("Active members", active_members, archived=False, balances=d_balances)
         active_selected = st.session_state.selected_member_id
         active_ids = {row["id"] for row in active_members}
         render_history(
@@ -1473,6 +1722,9 @@ def main() -> None:
         with right:
             add_member_form()
             render_archive_shortlist(active_members)
+
+    elif selected_tab == "Debt":
+        render_debt_tab(active_members)
 
     else:
         render_member_list("Archived members", archived_members, archived=True)
