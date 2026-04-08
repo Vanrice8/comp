@@ -1054,7 +1054,7 @@ def login_screen() -> None:
               <div class="kt-login-title">The Incident Managers Sigma Grindset Log</div>
               <div class="kt-login-sub">Enter the team password to log in</div>
               <div class="kt-login-tagline">
-                Track <strong>your</strong> overtime earnings...<br>
+                Track your overtime earnings...<br>
                 and cash out those sweet, sweet on-call hours!
               </div>
             </div>
