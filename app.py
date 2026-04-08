@@ -601,22 +601,20 @@ def parse_hhmm(value: str) -> int | None:
 
 
 def past_beredskap_periods(n: int = 52) -> list[str]:
-    """Return last n completed Thursday→Thursday on-call periods, newest first."""
+    """Return last n Thursday→Thursday on-call periods, newest first. Includes current active period."""
     today = date.today()
-    # Step back to the most recent Thursday that is strictly in the past
-    days_back = (today.weekday() - 3) % 7
-    if days_back == 0:
-        days_back = 7  # today is Thursday — last completed end was 7 days ago
-    last_completed_thursday = today - timedelta(days=days_back)
+    # Find the end of the current period (next Thursday, or today if Thursday)
+    days_until_thursday = (3 - today.weekday()) % 7
+    current_period_end = today + timedelta(days=days_until_thursday)
 
     periods = []
     for i in range(n):
-        period_end   = last_completed_thursday - timedelta(weeks=i)
+        period_end   = current_period_end - timedelta(weeks=i)
         period_start = period_end - timedelta(weeks=1)
         start_str = f"{period_start.day}/{period_start.month}/{str(period_start.year)[2:]}"
         end_str   = f"{period_end.day}/{period_end.month}/{str(period_end.year)[2:]}"
         periods.append(f"Intjänat under beredskap {start_str}–{end_str}")
-    return periods  # already newest-first
+    return periods
 
 
 def member_label(row: dict) -> str:
