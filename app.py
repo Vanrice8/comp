@@ -613,8 +613,8 @@ def past_beredskap_periods(n: int = 52) -> list[str]:
     for i in range(n):
         period_end   = last_completed_thursday - timedelta(weeks=i)
         period_start = period_end - timedelta(weeks=1)
-        start_str = f"{period_start.day}/{period_start.month}"
-        end_str   = f"{period_end.day}/{period_end.month}"
+        start_str = f"{period_start.day}/{period_start.month}/{str(period_start.year)[2:]}"
+        end_str   = f"{period_end.day}/{period_end.month}/{str(period_end.year)[2:]}"
         periods.append(f"Intjänat under beredskap {start_str}–{end_str}")
     return periods  # already newest-first
 
