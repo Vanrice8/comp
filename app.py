@@ -992,6 +992,13 @@ def inject_theme(theme_mode: str) -> None:
           letter-spacing: -0.03em;
         }
 
+        .kt-metric-sub {
+          color: var(--kt-muted);
+          font-size: 0.82rem;
+          font-weight: 500;
+          margin-top: 0.25rem;
+        }
+
         .kt-member-main {
           display: flex;
           align-items: center;
@@ -1228,12 +1235,14 @@ def inject_theme(theme_mode: str) -> None:
     )
 
 
-def render_metric_card(label: str, value: str) -> None:
+def render_metric_card(label: str, value: str, sub: str = "") -> None:
+    sub_html = f'<div class="kt-metric-sub">{sub}</div>' if sub else ""
     st.markdown(
         f"""
         <div class="kt-metric">
           <div class="kt-metric-label">{label}</div>
           <div class="kt-metric-value">{value}</div>
+          {sub_html}
         </div>
         """,
         unsafe_allow_html=True,
@@ -1791,11 +1800,45 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     total_balance_minutes = sum(row["balance_minutes"] for row in active_members)
+
+    # Top Grinder — active member with the highest balance
+    top_grinder = max(active_members, key=lambda r: r["balance_minutes"], default=None)
+    if top_grinder and top_grinder["balance_minutes"] > 0:
+        top_grinder_name = member_label(top_grinder)
+        top_grinder_sub  = mins_to_hhmm(top_grinder["balance_minutes"]) + " earned"
+    else:
+        top_grinder_name = "—"
+        top_grinder_sub  = "No hours logged yet"
+
+    # Most Covered — member owed the most coverage (from debt balances)
+    d_balances_main = debt_balances()
+    member_map = {row["id"]: row for row in active_members}
+    best_cov_id  = None
+    best_cov_min = 0
+    best_cov_day = 0
+    for mid, b in d_balances_main.items():
+        if b.get("minutes", 0) > best_cov_min:
+            best_cov_min = b["minutes"]
+            best_cov_id  = mid
+        elif b.get("minutes", 0) == 0 and b.get("days", 0) > best_cov_day:
+            best_cov_day = b["days"]
+            best_cov_id  = mid
+    if best_cov_id and best_cov_id in member_map:
+        cov_row  = member_map[best_cov_id]
+        cov_name = member_label(cov_row)
+        if best_cov_min > 0:
+            cov_sub = f"owed {mins_to_hhmm(best_cov_min)}"
+        else:
+            cov_sub = f"owed {best_cov_day}d"
+    else:
+        cov_name = "—"
+        cov_sub  = "No debts logged yet"
+
     metric_col_a, metric_col_b, metric_col_c = st.columns(3)
     with metric_col_a:
-        render_metric_card("Active members", str(len(active_members)))
+        render_metric_card("🏆 Top Grinder", top_grinder_name, top_grinder_sub)
     with metric_col_b:
-        render_metric_card("Archived", str(len(archived_members)))
+        render_metric_card("💰 Most Covered", cov_name, cov_sub)
     with metric_col_c:
         render_metric_card("Total balance", mins_to_hhmm(total_balance_minutes))
 
@@ -1810,8 +1853,7 @@ def main() -> None:
     st.session_state.active_tab = selected_tab
 
     if selected_tab == "Tracker":
-        d_balances = debt_balances()
-        render_member_list("Active members", active_members, archived=False, balances=d_balances)
+        render_member_list("Active members", active_members, archived=False, balances=d_balances_main)
         active_selected = st.session_state.selected_member_id
         active_ids = {row["id"] for row in active_members}
         render_history(
