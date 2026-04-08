@@ -124,8 +124,10 @@ def init_sqlite() -> None:
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               debtor_id INTEGER NOT NULL,
               creditor_id INTEGER NOT NULL,
-              minutes INTEGER NOT NULL,
+              minutes INTEGER,
+              days INTEGER,
               date TEXT NOT NULL,
+              date_to TEXT,
               comment TEXT,
               created_at TEXT DEFAULT (datetime('now')),
               FOREIGN KEY (debtor_id) REFERENCES members(id),
@@ -141,6 +143,13 @@ def init_sqlite() -> None:
             conn.execute("ALTER TABLE members ADD COLUMN nickname TEXT")
         if "is_archived" not in member_columns:
             conn.execute("ALTER TABLE members ADD COLUMN is_archived INTEGER DEFAULT 0")
+
+        # Migrate debts table columns if missing
+        debt_columns = {row["name"] for row in conn.execute("PRAGMA table_info(debts)").fetchall()}
+        if "days"    not in debt_columns:
+            conn.execute("ALTER TABLE debts ADD COLUMN days INTEGER")
+        if "date_to" not in debt_columns:
+            conn.execute("ALTER TABLE debts ADD COLUMN date_to TEXT")
 
         conn.execute("UPDATE members SET name = 'Jennifer' WHERE name = 'Jen'")
         conn.commit()
@@ -315,7 +324,7 @@ def supabase_all_entries() -> list[dict]:
 def supabase_all_debts() -> list[dict]:
     rows = supabase_request(
         "GET", "debts",
-        params={"select": "id,debtor_id,creditor_id,minutes,date,comment,created_at"},
+        params={"select": "id,debtor_id,creditor_id,minutes,days,date,date_to,comment,created_at"},
     )
     return rows or []
 
@@ -546,7 +555,7 @@ def sqlite_load_debts() -> list[dict]:
     try:
         rows = conn.execute(
             """
-            SELECT d.id, d.minutes, d.date, d.comment, d.created_at,
+            SELECT d.id, d.minutes, d.days, d.date, d.date_to, d.comment, d.created_at,
                    d.debtor_id, d.creditor_id,
                    md.name AS debtor_name, md.nickname AS debtor_nickname,
                    mc.name AS creditor_name, mc.nickname AS creditor_nickname
@@ -561,12 +570,13 @@ def sqlite_load_debts() -> list[dict]:
         conn.close()
 
 
-def sqlite_add_debt(debtor_id: int, creditor_id: int, minutes: int, date_value: str, comment: str | None) -> None:
+def sqlite_add_debt(debtor_id: int, creditor_id: int, minutes: int | None, days: int | None,
+                    date_value: str, date_to: str | None, comment: str | None) -> None:
     conn = sqlite_connection()
     try:
         conn.execute(
-            "INSERT INTO debts (debtor_id, creditor_id, minutes, date, comment) VALUES (?,?,?,?,?)",
-            (debtor_id, creditor_id, minutes, date_value, comment),
+            "INSERT INTO debts (debtor_id, creditor_id, minutes, days, date, date_to, comment) VALUES (?,?,?,?,?,?,?)",
+            (debtor_id, creditor_id, minutes, days, date_value, date_to, comment),
         )
         conn.commit()
     finally:
@@ -582,17 +592,22 @@ def sqlite_delete_debt(debt_id: int) -> None:
         conn.close()
 
 
-def sqlite_debt_balances() -> dict[int, int]:
-    """Returns net debt minutes per member: positive = owed to them, negative = they owe."""
+def sqlite_debt_balances() -> dict[int, dict]:
+    """Returns net debt per member: {member_id: {minutes: int, days: int}}. Positive = owed to them."""
     conn = sqlite_connection()
     try:
-        rows = conn.execute("SELECT debtor_id, creditor_id, minutes FROM debts").fetchall()
+        rows = conn.execute("SELECT debtor_id, creditor_id, minutes, days FROM debts").fetchall()
     finally:
         conn.close()
-    balances: dict[int, int] = {}
+    balances: dict[int, dict] = {}
     for row in rows:
-        balances[row["creditor_id"]] = balances.get(row["creditor_id"], 0) + row["minutes"]
-        balances[row["debtor_id"]]   = balances.get(row["debtor_id"],   0) - row["minutes"]
+        for mid, sign in [(row["creditor_id"], 1), (row["debtor_id"], -1)]:
+            if mid not in balances:
+                balances[mid] = {"minutes": 0, "days": 0}
+            if row["minutes"]:
+                balances[mid]["minutes"] += sign * row["minutes"]
+            if row["days"]:
+                balances[mid]["days"] += sign * row["days"]
     return balances
 
 
@@ -604,11 +619,13 @@ def supabase_load_debts() -> list[dict]:
         debtor   = members.get(int(d["debtor_id"]),   {})
         creditor = members.get(int(d["creditor_id"]), {})
         result.append({
-            "id": int(d["id"]),
+            "id":               int(d["id"]),
             "debtor_id":        int(d["debtor_id"]),
             "creditor_id":      int(d["creditor_id"]),
-            "minutes":          int(d["minutes"]),
+            "minutes":          int(d["minutes"]) if d.get("minutes") is not None else None,
+            "days":             int(d["days"])    if d.get("days")    is not None else None,
             "date":             d["date"],
+            "date_to":          d.get("date_to"),
             "comment":          d.get("comment") or "",
             "created_at":       d.get("created_at") or "",
             "debtor_name":      debtor.get("name", ""),
@@ -620,12 +637,14 @@ def supabase_load_debts() -> list[dict]:
     return result
 
 
-def supabase_add_debt(debtor_id: int, creditor_id: int, minutes: int, date_value: str, comment: str | None) -> None:
+def supabase_add_debt(debtor_id: int, creditor_id: int, minutes: int | None, days: int | None,
+                      date_value: str, date_to: str | None, comment: str | None) -> None:
     supabase_request(
         "POST", "debts",
         body={"debtor_id": debtor_id, "creditor_id": creditor_id,
-              "minutes": minutes, "date": date_value, "comment": comment,
-              "created_at": datetime.now(timezone.utc).isoformat()},
+              "minutes": minutes, "days": days,
+              "date": date_value, "date_to": date_to,
+              "comment": comment, "created_at": datetime.now(timezone.utc).isoformat()},
         prefer="return=minimal",
     )
 
@@ -634,14 +653,18 @@ def supabase_delete_debt(debt_id: int) -> None:
     supabase_request("DELETE", "debts", params={"id": f"eq.{debt_id}"}, prefer="return=minimal")
 
 
-def supabase_debt_balances() -> dict[int, int]:
-    balances: dict[int, int] = {}
+def supabase_debt_balances() -> dict[int, dict]:
+    balances: dict[int, dict] = {}
     for d in supabase_all_debts():
         cid = int(d["creditor_id"])
         did = int(d["debtor_id"])
-        m   = int(d["minutes"])
-        balances[cid] = balances.get(cid, 0) + m
-        balances[did] = balances.get(did, 0) - m
+        for mid, sign in [(cid, 1), (did, -1)]:
+            if mid not in balances:
+                balances[mid] = {"minutes": 0, "days": 0}
+            if d.get("minutes") is not None:
+                balances[mid]["minutes"] += sign * int(d["minutes"])
+            if d.get("days") is not None:
+                balances[mid]["days"] += sign * int(d["days"])
     return balances
 
 
@@ -649,11 +672,12 @@ def load_debts() -> list[dict]:
     return supabase_load_debts() if using_supabase() else sqlite_load_debts()
 
 
-def add_debt(debtor_id: int, creditor_id: int, minutes: int, date_value: str, comment: str | None) -> None:
+def add_debt(debtor_id: int, creditor_id: int, minutes: int | None, days: int | None,
+             date_value: str, date_to: str | None, comment: str | None) -> None:
     if using_supabase():
-        supabase_add_debt(debtor_id, creditor_id, minutes, date_value, comment)
+        supabase_add_debt(debtor_id, creditor_id, minutes, days, date_value, date_to, comment)
     else:
-        sqlite_add_debt(debtor_id, creditor_id, minutes, date_value, comment)
+        sqlite_add_debt(debtor_id, creditor_id, minutes, days, date_value, date_to, comment)
 
 
 def delete_debt(debt_id: int) -> None:
@@ -1329,12 +1353,22 @@ def render_member_list(title: str, members: list[dict], archived: bool = False, 
         label = member_label(row)
         balance = mins_to_hhmm(row["balance_minutes"])
         real_name = row["name"]
-        net_debt = (balances or {}).get(int(row["id"]), 0)
+        member_debt = (balances or {}).get(int(row["id"]), {"minutes": 0, "days": 0})
+        debt_parts = []
+        if not archived:
+            net_mins = member_debt.get("minutes", 0)
+            net_days = member_debt.get("days", 0)
+            if net_mins != 0:
+                sign = "+" if net_mins > 0 else ""
+                col = "#49d7a2" if net_mins > 0 else "#ff8a8a"
+                debt_parts.append(f'<span style="color:{col}">{sign}{mins_to_hhmm(net_mins)}</span>')
+            if net_days != 0:
+                sign = "+" if net_days > 0 else ""
+                col = "#49d7a2" if net_days > 0 else "#ff8a8a"
+                debt_parts.append(f'<span style="color:{col}">{sign}{net_days}d</span>')
         debt_str = ""
-        if not archived and net_debt != 0:
-            sign = "+" if net_debt > 0 else ""
-            debt_color = "#49d7a2" if net_debt > 0 else "#ff8a8a"
-            debt_str = f'<span style="font-size:0.75rem;font-weight:600;color:{debt_color};margin-left:0.5rem;" title="Coverage debt balance">{sign}{mins_to_hhmm(net_debt)} debt</span>'
+        if debt_parts:
+            debt_str = f'<span style="font-size:0.75rem;font-weight:600;margin-left:0.5rem;" title="Coverage debt">{" ".join(debt_parts)}</span>'
         sub = "" if archived else (real_name if label != real_name else "")
         row_cols = st.columns([5.3, 1.1, 1.9], gap="medium")
         row_cols[0].markdown(
@@ -1569,45 +1603,75 @@ def render_debt_tab(active_members: list[dict]) -> None:
     else:
         options = {member_label(row): row["id"] for row in active_members}
         member_names = list(options.keys())
+
+        coverage_type = st.radio("Coverage type", ["Hours", "Days"], horizontal=True, key="debt_coverage_type")
+
         with st.form("debt_form", clear_on_submit=True):
-            creditor_label = st.selectbox("Who covered? (is owed)", member_names, key="debt_creditor")
-            debtor_label   = st.selectbox("Covered for whom? (owes)", member_names, key="debt_debtor")
-            date_value     = st.date_input("Date")
-            hours_text     = st.text_input("Hours (HH:MM)", placeholder="8:30")
-            comment        = st.text_input("Comment (optional)")
-            submitted      = st.form_submit_button("Save debt", use_container_width=True)
+            creditor_label = st.selectbox("Who covered? (is owed)", member_names)
+            debtor_label   = st.selectbox("Covered for whom? (owes)", member_names)
+            start_date     = st.date_input("From date")
+            multi_day      = st.checkbox("Spans multiple days (add end date)")
+            end_date       = st.date_input("To date", value=None)
+
+            if st.session_state.get("debt_coverage_type", "Hours") == "Hours":
+                hours_text = st.text_input("Hours (HH:MM)", placeholder="8:30")
+                days_count = None
+            else:
+                days_count = st.number_input("Number of days", min_value=1, value=1, step=1)
+                hours_text = ""
+
+            comment  = st.text_input("Comment (optional)")
+            submitted = st.form_submit_button("Save debt", use_container_width=True)
+
         if submitted:
             if creditor_label == debtor_label:
                 st.error("A member cannot owe themselves.")
             else:
-                mins = parse_hhmm(hours_text)
-                if not mins:
-                    st.error("Enter hours in HH:MM format, e.g. 8:30.")
+                date_to = end_date.isoformat() if multi_day and end_date and end_date > start_date else None
+                mins = None
+                d_count = None
+                if coverage_type == "Hours":
+                    mins = parse_hhmm(hours_text)
+                    if not mins:
+                        st.error("Enter hours in HH:MM format, e.g. 8:30.")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        return
                 else:
-                    try:
-                        add_debt(options[debtor_label], options[creditor_label], mins,
-                                 date_value.isoformat(), comment.strip() or None)
-                        invalidate_cache()
-                        st.success("Debt logged.")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Could not save debt: {exc}")
+                    d_count = int(days_count)
+                try:
+                    add_debt(options[debtor_label], options[creditor_label],
+                             mins, d_count, start_date.isoformat(), date_to,
+                             comment.strip() or None)
+                    invalidate_cache()
+                    st.success("Debt logged.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Could not save debt: {exc}")
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Debt balances ────────────────────────────────────────────────────────
     balances = debt_balances()
     st.markdown('<div class="kt-card">', unsafe_allow_html=True)
     st.markdown('<div class="kt-card-label">Coverage balances</div>', unsafe_allow_html=True)
-    member_map = {int(m["id"]): m for m in active_members}
-    sorted_members = sorted(active_members, key=lambda m: balances.get(int(m["id"]), 0), reverse=True)
-    for row in sorted_members:
-        net = balances.get(int(row["id"]), 0)
+    for row in active_members:
+        b = balances.get(int(row["id"]), {"minutes": 0, "days": 0})
+        net_mins = b.get("minutes", 0)
+        net_days = b.get("days", 0)
         label = member_label(row)
-        sign = "+" if net > 0 else ""
-        bal_class = "pos" if net > 0 else ("neg" if net < 0 else "")
+        parts = []
+        if net_mins != 0:
+            sign = "+" if net_mins > 0 else ""
+            cls  = "pos" if net_mins > 0 else "neg"
+            parts.append(f'<span class="kt-balance {cls}" style="font-size:1.1rem">{sign}{mins_to_hhmm(net_mins)}</span>')
+        if net_days != 0:
+            sign = "+" if net_days > 0 else ""
+            cls  = "pos" if net_days > 0 else "neg"
+            parts.append(f'<span class="kt-balance {cls}" style="font-size:1.1rem">{sign}{net_days} day{"s" if abs(net_days)!=1 else ""}</span>')
+        if not parts:
+            parts = ['<span style="color:var(--kt-muted);font-size:1rem">—</span>']
         cols = st.columns([5, 2])
         cols[0].markdown(f'<div class="kt-member-main"><div class="kt-member-text"><span>{label}</span></div></div>', unsafe_allow_html=True)
-        cols[1].markdown(f'<div class="kt-balance {bal_class}">{sign}{mins_to_hhmm(net)}</div>', unsafe_allow_html=True)
+        cols[1].markdown(" ".join(parts), unsafe_allow_html=True)
         st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1622,9 +1686,23 @@ def render_debt_tab(active_members: list[dict]) -> None:
     for d in debts:
         creditor_nick = d.get("creditor_nickname") or d["creditor_name"]
         debtor_nick   = d.get("debtor_nickname")   or d["debtor_name"]
-        cols = st.columns([1.1, 0.8, 2.4, 0.8])
-        cols[0].markdown(f'<div class="kt-entry-date">{format_date(d["date"])}</div>', unsafe_allow_html=True)
-        cols[1].markdown(f'<div class="kt-entry-amount pos">+{mins_to_hhmm(d["minutes"])}</div>', unsafe_allow_html=True)
+
+        # Date range display
+        date_str = format_date(d["date"])
+        if d.get("date_to"):
+            date_str += f"–{format_date(d['date_to'])}"
+
+        # Amount display
+        if d.get("days"):
+            amount_str = f'+{d["days"]} day{"s" if d["days"]!=1 else ""}'
+            amount_cls = "pos"
+        else:
+            amount_str = f'+{mins_to_hhmm(d["minutes"])}' if d.get("minutes") else "?"
+            amount_cls = "pos"
+
+        cols = st.columns([1.3, 0.9, 2.3])
+        cols[0].markdown(f'<div class="kt-entry-date">{date_str}</div>', unsafe_allow_html=True)
+        cols[1].markdown(f'<div class="kt-entry-amount {amount_cls}">{amount_str}</div>', unsafe_allow_html=True)
         cols[2].markdown(
             f'<div class="kt-entry-comment"><b>{creditor_nick}</b> covered for <b>{debtor_nick}</b>'
             f'{(" — " + d["comment"]) if d.get("comment") else ""}</div>',
