@@ -947,15 +947,24 @@ def inject_theme(theme_mode: str) -> None:
         }
 
         .kt-login-card {
-          background: rgba(15, 25, 50, 0.82);
-          backdrop-filter: blur(10px);
+          background: var(--kt-surface);
           border-radius: 20px;
           box-shadow: var(--kt-shadow-lg);
           padding: 2.5rem 2.25rem;
           width: 100%;
-          max-width: 420px;
+          max-width: 580px;
           text-align: center;
-          border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .kt-login-tagline {
+          color: var(--kt-muted);
+          font-size: 1rem;
+          margin-top: 1.4rem;
+          line-height: 1.6;
+        }
+
+        .kt-login-tagline strong {
+          color: var(--kt-text);
         }
 
         .kt-login-logo {
@@ -964,10 +973,11 @@ def inject_theme(theme_mode: str) -> None:
         }
 
         .kt-login-title {
-          font-size: 1.7rem;
+          font-size: 1.9rem;
           font-weight: 800;
           color: var(--kt-text);
           margin-bottom: 0.4rem;
+          line-height: 1.25;
         }
 
         .kt-login-sub {
@@ -1026,49 +1036,9 @@ def render_metric_card(label: str, value: str) -> None:
     )
 
 
-def get_login_bg_css() -> str:
-    img_path = Path(__file__).resolve().parent / "4ff6d3e9-19e4-47a4-8399-655389cb9225.png"
-    if not img_path.exists():
-        return ""
-    import base64
-    b64 = base64.b64encode(img_path.read_bytes()).decode()
-    return f"""
-    <style>
-    #login-screen-bg {{
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        overflow: hidden;
-    }}
-    #login-screen-bg::before {{
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: url("data:image/png;base64,{b64}") center -30px / 130% auto no-repeat;
-    }}
-    #login-screen-bg::after {{
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(to bottom,
-            transparent 25%,
-            rgba(13,27,46,0.6) 45%,
-            #0d1b2e 62%
-        );
-    }}
-    .kt-login-shell {{
-        position: relative;
-        z-index: 1;
-    }}
-    </style>
-    <div id="login-screen-bg"></div>
-    """
-
-
 def login_screen() -> None:
-    st.markdown(get_login_bg_css(), unsafe_allow_html=True)
     st.markdown("<div style='height:8vh;'></div>", unsafe_allow_html=True)
-    left, center, right = st.columns([1.35, 1, 1.35])
+    left, center, right = st.columns([1, 1.6, 1])
     with center:
         st.markdown(
             """
@@ -1076,6 +1046,10 @@ def login_screen() -> None:
               <div class="kt-login-logo">⏱</div>
               <div class="kt-login-title">The Incident Managers Sigma Grindset Log</div>
               <div class="kt-login-sub">Enter the team password to log in</div>
+            </div>
+            <div class="kt-login-tagline">
+              Track <strong>your</strong> overtime earnings...<br>
+              and choose when to cash out those sweet, sweet on-call hours!
             </div>
             """,
             unsafe_allow_html=True,
