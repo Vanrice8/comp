@@ -601,9 +601,9 @@ def parse_hhmm(value: str) -> int | None:
 
 
 def past_beredskap_periods(n: int = 52) -> list[str]:
-    """Return last n completed Friday→Thursday on-call periods as comment strings."""
+    """Return last n completed Thursday→Thursday on-call periods as comment strings."""
     today = date.today()
-    # Find most recent completed Thursday
+    # Find most recent completed Thursday (period end)
     days_since_thursday = (today.weekday() - 3) % 7
     last_thursday = today - timedelta(days=days_since_thursday)
     # If today IS Thursday, that period just ended — include it
@@ -613,8 +613,8 @@ def past_beredskap_periods(n: int = 52) -> list[str]:
     periods = []
     for i in range(n):
         period_end = last_thursday - timedelta(weeks=i)
-        period_start = period_end - timedelta(days=6)  # Friday
-        if period_end >= today and days_since_thursday != 0:
+        period_start = period_end - timedelta(weeks=1)  # previous Thursday
+        if period_end > today:
             continue
         start_str = f"{period_start.day}/{period_start.month}"
         end_str = f"{period_end.day}/{period_end.month}"
