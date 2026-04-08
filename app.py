@@ -1841,7 +1841,7 @@ def main() -> None:
 
     selected_tab = st.segmented_control(
         "View",
-        ["Tracker", "Debt", "Archive"],
+        ["Tracker", "Debt", "Team", "Archive"],
         selection_mode="single",
         default=st.session_state.get("active_tab", "Tracker"),
         key="active_tab_selector",
@@ -1858,15 +1858,17 @@ def main() -> None:
             st.session_state.selected_member_name if active_selected in active_ids else None,
             archived=False,
         )
-        left, right = st.columns(2, gap="large")
-        with left:
-            add_entry_form(active_members)
-        with right:
-            add_member_form()
-            render_archive_shortlist(active_members)
+        add_entry_form(active_members)
 
     elif selected_tab == "Debt":
         render_debt_tab(active_members)
+
+    elif selected_tab == "Team":
+        left, right = st.columns(2, gap="large")
+        with left:
+            add_member_form()
+        with right:
+            render_archive_shortlist(active_members)
 
     else:
         render_member_list("Archived members", archived_members, archived=True)
