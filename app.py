@@ -1011,45 +1011,45 @@ def login_screen() -> None:
             <div class="kt-login-card">
               <div class="kt-login-logo">⏱</div>
               <div class="kt-login-title">Komp Tracker</div>
-              <div class="kt-login-sub">Ange teamlösenordet för att logga in</div>
+              <div class="kt-login-sub">Enter the team password to log in</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
         with st.form("login_form", clear_on_submit=False):
             password = st.text_input(
-                "Lösenord",
+                "Password",
                 type="password",
                 key="login_password",
                 label_visibility="collapsed",
-                placeholder="Lösenord",
+                placeholder="Password",
             )
-            submitted = st.form_submit_button("Logga in", use_container_width=True)
+            submitted = st.form_submit_button("Log in", use_container_width=True)
         if submitted:
             if password == get_app_password():
                 st.session_state.authenticated = True
                 st.rerun()
-            st.error("Fel lösenord. Försök igen.")
+            st.error("Wrong password. Please try again.")
         st.caption(get_session_secret_note())
 
 
 def add_member_form() -> None:
     st.markdown('<div class="kt-card">', unsafe_allow_html=True)
-    st.markdown('<div class="kt-card-label">Ny medlem</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">New member</div>', unsafe_allow_html=True)
     with st.form("new_member_form", clear_on_submit=True):
-        name = st.text_input("Riktigt namn")
-        nickname = st.text_input("Smeknamn (valfritt)")
-        submitted = st.form_submit_button("Lägg till medlem", use_container_width=True)
+        name = st.text_input("Full name")
+        nickname = st.text_input("Nickname (optional)")
+        submitted = st.form_submit_button("Add member", use_container_width=True)
     if submitted:
         if not name.strip():
-            st.error("Ange ett namn.")
+            st.error("Please enter a name.")
             return
         try:
             add_member(name.strip(), nickname.strip() or None)
         except Exception as exc:
-            st.error(f"Kunde inte lägga till medlemmen: {exc}")
+            st.error(f"Could not add member: {exc}")
             return
-        st.success("Medlem tillagd.")
+        st.success("Member added.")
         invalidate_cache()
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1057,27 +1057,27 @@ def add_member_form() -> None:
 
 def add_entry_form(active_members: list[dict]) -> None:
     st.markdown('<div class="kt-card">', unsafe_allow_html=True)
-    st.markdown('<div class="kt-card-label">Lägg till komp</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">Add comp</div>', unsafe_allow_html=True)
     if not active_members:
-        st.info("Det finns inga aktiva medlemmar att registrera timmar på.")
+        st.info("No active members to log hours for.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
     options = {member_label(row): row["id"] for row in active_members}
     with st.form("entry_form", clear_on_submit=True):
         chosen_label = st.selectbox("Person", list(options.keys()))
-        entry_type = st.radio("Typ", ["Intjänad", "Uttag"], horizontal=True)
-        date_value = st.date_input("Datum")
-        hours_text = st.text_input("Antal timmar (TT:MM)", placeholder="8:30")
-        comment = st.text_input("Kommentar (valfritt)")
-        submitted = st.form_submit_button("Spara post", use_container_width=True)
+        entry_type = st.radio("Type", ["Earned", "Used"], horizontal=True)
+        date_value = st.date_input("Date")
+        hours_text = st.text_input("Hours (HH:MM)", placeholder="8:30")
+        comment = st.text_input("Comment (optional)")
+        submitted = st.form_submit_button("Save entry", use_container_width=True)
 
     if submitted:
         total_minutes = parse_hhmm(hours_text)
         if total_minutes in (None, 0):
-            st.error("Ange timmar i formatet TT:MM, till exempel 8:30.")
+            st.error("Enter hours in HH:MM format, e.g. 8:30.")
             return
-        signed_minutes = total_minutes if entry_type == "Intjänad" else -total_minutes
+        signed_minutes = total_minutes if entry_type == "Earned" else -total_minutes
         try:
             add_entry(
                 options[chosen_label],
@@ -1086,9 +1086,9 @@ def add_entry_form(active_members: list[dict]) -> None:
                 comment.strip() or None,
             )
         except Exception as exc:
-            st.error(f"Kunde inte spara posten: {exc}")
+            st.error(f"Could not save entry: {exc}")
             return
-        st.success("Post sparad.")
+        st.success("Entry saved.")
         invalidate_cache()
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1099,7 +1099,7 @@ def render_member_list(title: str, members: list[dict], archived: bool = False) 
     st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
     st.markdown(f'<div class="kt-card-label">{title}</div>', unsafe_allow_html=True)
     if not members:
-        st.info("Inga medlemmar att visa.")
+        st.info("No members to show.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -1130,34 +1130,34 @@ def render_member_list(title: str, members: list[dict], archived: bool = False) 
 
         if archived:
             action_cols = row_cols[2].columns([1, 1.25], gap="small")
-            if action_cols[0].button("Visa", key=f"history_archived_{row['id']}", use_container_width=True):
+            if action_cols[0].button("View", key=f"history_archived_{row['id']}", use_container_width=True):
                 if (
                     st.session_state.get("selected_member_id") == row["id"]
-                    and st.session_state.get("active_tab") == "Arkiv"
+                    and st.session_state.get("active_tab") == "Archive"
                 ):
                     st.session_state.selected_member_id = None
                     st.session_state.selected_member_name = None
                 else:
                     st.session_state.selected_member_id = row["id"]
                     st.session_state.selected_member_name = label
-                    st.session_state.active_tab = "Arkiv"
+                    st.session_state.active_tab = "Archive"
                 st.rerun()
-            if action_cols[1].button("Återställ", key=f"restore_{row['id']}", use_container_width=True):
+            if action_cols[1].button("Restore", key=f"restore_{row['id']}", use_container_width=True):
                 restore_member(row["id"])
                 invalidate_cache()
                 st.rerun()
         else:
-            if row_cols[2].button("Visa", key=f"history_{row['id']}", use_container_width=True):
+            if row_cols[2].button("View", key=f"history_{row['id']}", use_container_width=True):
                 if (
                     st.session_state.get("selected_member_id") == row["id"]
-                    and st.session_state.get("active_tab") == "Hantera"
+                    and st.session_state.get("active_tab") == "Manage"
                 ):
                     st.session_state.selected_member_id = None
                     st.session_state.selected_member_name = None
                 else:
                     st.session_state.selected_member_id = row["id"]
                     st.session_state.selected_member_name = label
-                    st.session_state.active_tab = "Hantera"
+                    st.session_state.active_tab = "Manage"
                 st.rerun()
         st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1165,9 +1165,9 @@ def render_member_list(title: str, members: list[dict], archived: bool = False) 
 
 def render_archive_shortlist(active_members: list[dict]) -> None:
     st.markdown('<div class="kt-card">', unsafe_allow_html=True)
-    st.markdown('<div class="kt-card-label">Arkivera medlem</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">Archive member</div>', unsafe_allow_html=True)
     if not active_members:
-        st.caption("Inga aktiva medlemmar att arkivera.")
+        st.caption("No active members to archive.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -1189,7 +1189,7 @@ def render_archive_shortlist(active_members: list[dict]) -> None:
         pending_archive_id = st.session_state.get("pending_archive_id")
         if pending_archive_id == row["id"]:
             confirm_cols = line_cols[1].columns([1, 1], gap="small")
-            if confirm_cols[0].button("Ja", key=f"archive_confirm_{row['id']}", use_container_width=True):
+            if confirm_cols[0].button("Yes", key=f"archive_confirm_{row['id']}", use_container_width=True):
                 archive_member(row["id"])
                 st.session_state.pending_archive_id = None
                 if st.session_state.get("selected_member_id") == row["id"]:
@@ -1197,11 +1197,11 @@ def render_archive_shortlist(active_members: list[dict]) -> None:
                     st.session_state.selected_member_name = None
                 invalidate_cache()
                 st.rerun()
-            if confirm_cols[1].button("Nej", key=f"archive_cancel_{row['id']}", use_container_width=True):
+            if confirm_cols[1].button("No", key=f"archive_cancel_{row['id']}", use_container_width=True):
                 st.session_state.pending_archive_id = None
                 st.rerun()
         else:
-            if line_cols[1].button("Arkivera", key=f"archive_{row['id']}", use_container_width=True):
+            if line_cols[1].button("Archive", key=f"archive_{row['id']}", use_container_width=True):
                 st.session_state.pending_archive_id = row["id"]
                 st.rerun()
         st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
@@ -1210,22 +1210,22 @@ def render_archive_shortlist(active_members: list[dict]) -> None:
 
 def render_history(member_id: int | None, member_name: str | None, archived: bool) -> None:
     st.markdown('<div class="kt-card">', unsafe_allow_html=True)
-    st.markdown('<div class="kt-card-label">Historik</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">History</div>', unsafe_allow_html=True)
     if not member_id:
-        st.caption("Välj en medlem för att se och hantera historiken.")
+        st.caption("Select a member to view their history.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
     entries = load_entries(member_id)
-    st.caption(f"Visar poster för {member_name}.")
+    st.caption(f"Showing entries for {member_name}.")
     if not entries:
-        st.info("Ingen historik ännu.")
+        st.info("No history yet.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
     for entry in entries:
         amount = mins_to_hhmm(entry["minutes"])
-        comment = entry["comment"] or "Ingen kommentar"
+        comment = entry["comment"] or "No comment"
         left, middle, right = st.columns([1.1, 0.8, 2.4])
         left.markdown(
             f'<div class="kt-entry-date">{format_date(entry["date"])}</div>',
@@ -1244,18 +1244,18 @@ def render_history(member_id: int | None, member_name: str | None, archived: boo
             pending_del = st.session_state.get("pending_delete_id")
             if pending_del == entry["id"]:
                 del_cols = st.columns([3.3, 0.5, 0.5])
-                del_cols[0].markdown("**Ta bort denna post?**")
-                if del_cols[1].button("Ja", key=f"delete_confirm_{entry['id']}", use_container_width=True):
+                del_cols[0].markdown("**Delete this entry?**")
+                if del_cols[1].button("Yes", key=f"delete_confirm_{entry['id']}", use_container_width=True):
                     delete_entry(entry["id"])
                     st.session_state.pending_delete_id = None
                     invalidate_cache()
                     st.rerun()
-                if del_cols[2].button("Nej", key=f"delete_cancel_{entry['id']}", use_container_width=True):
+                if del_cols[2].button("No", key=f"delete_cancel_{entry['id']}", use_container_width=True):
                     st.session_state.pending_delete_id = None
                     st.rerun()
             else:
                 delete_col = st.columns([4.3, 1])[1]
-                if delete_col.button("Ta bort", key=f"delete_{entry['id']}", use_container_width=True):
+                if delete_col.button("Delete", key=f"delete_{entry['id']}", use_container_width=True):
                     st.session_state.pending_delete_id = entry["id"]
                     st.rerun()
         st.markdown('<div class="kt-row-divider"></div>', unsafe_allow_html=True)
@@ -1264,9 +1264,9 @@ def render_history(member_id: int | None, member_name: str | None, archived: boo
 
 def render_overview(active_members: list[dict]) -> None:
     st.markdown('<div class="kt-card">', unsafe_allow_html=True)
-    st.markdown('<div class="kt-card-label">Översikt</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kt-card-label">Overview</div>', unsafe_allow_html=True)
     if not active_members:
-        st.info("Ingen data att visa i diagrammet än.")
+        st.info("No data to display yet.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -1333,18 +1333,18 @@ def build_komp_xlsx() -> bytes:
 
 
 def sidebar() -> None:
-    theme_options = ["🌙 Mörkt", "☀️ Ljust"]
+    theme_options = ["🌙 Dark", "☀️ Light"]
     theme_idx = 0 if st.session_state.get("theme_mode", "dark") == "dark" else 1
-    theme_choice = st.sidebar.radio("Tema", theme_options, index=theme_idx, horizontal=True)
-    st.session_state.theme_mode = "dark" if theme_choice == "🌙 Mörkt" else "light"
+    theme_choice = st.sidebar.radio("Theme", theme_options, index=theme_idx, horizontal=True)
+    st.session_state.theme_mode = "dark" if theme_choice == "🌙 Dark" else "light"
 
     st.sidebar.markdown("### Backup")
-    st.sidebar.caption("Excel-fil i samma format som originalschemat.")
-    if st.sidebar.button("Förbered Komp.xlsx", use_container_width=True):
+    st.sidebar.caption("Excel file in the same format as the original sheet.")
+    if st.sidebar.button("Prepare Komp.xlsx", use_container_width=True):
         st.session_state.komp_xlsx = build_komp_xlsx()
     if st.session_state.get("komp_xlsx"):
         st.sidebar.download_button(
-            "⬇ Ladda ner Komp.xlsx",
+            "⬇ Download Komp.xlsx",
             data=st.session_state.komp_xlsx,
             file_name="Komp.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1366,7 +1366,7 @@ def main() -> None:
     if "pending_delete_id" not in st.session_state:
         st.session_state.pending_delete_id = None
     if "active_tab" not in st.session_state:
-        st.session_state.active_tab = "Hantera"
+        st.session_state.active_tab = "Manage"
     if "theme_mode" not in st.session_state:
         st.session_state.theme_mode = "dark"
     if "komp_xlsx" not in st.session_state:
@@ -1394,24 +1394,24 @@ def main() -> None:
     total_balance_minutes = sum(row["balance_minutes"] for row in active_members)
     metric_col_a, metric_col_b, metric_col_c = st.columns(3)
     with metric_col_a:
-        render_metric_card("Aktiva medlemmar", str(len(active_members)))
+        render_metric_card("Active members", str(len(active_members)))
     with metric_col_b:
-        render_metric_card("Arkiverade", str(len(archived_members)))
+        render_metric_card("Archived", str(len(archived_members)))
     with metric_col_c:
-        render_metric_card("Totalt saldo", mins_to_hhmm(total_balance_minutes))
+        render_metric_card("Total balance", mins_to_hhmm(total_balance_minutes))
 
     selected_tab = st.segmented_control(
-        "Vy",
-        ["Hantera", "Arkiv"],
+        "View",
+        ["Manage", "Archive"],
         selection_mode="single",
-        default=st.session_state.get("active_tab", "Hantera"),
+        default=st.session_state.get("active_tab", "Manage"),
         key="active_tab_selector",
         label_visibility="collapsed",
     )
     st.session_state.active_tab = selected_tab
 
-    if selected_tab == "Hantera":
-        render_member_list("Aktiva medlemmar", active_members, archived=False)
+    if selected_tab == "Manage":
+        render_member_list("Active members", active_members, archived=False)
         active_selected = st.session_state.selected_member_id
         active_ids = {row["id"] for row in active_members}
         render_history(
@@ -1427,7 +1427,7 @@ def main() -> None:
             render_archive_shortlist(active_members)
 
     else:
-        render_member_list("Arkiverade medlemmar", archived_members, archived=True)
+        render_member_list("Archived members", archived_members, archived=True)
         archived_selected = st.session_state.selected_member_id
         archived_ids = {row["id"] for row in archived_members}
         render_history(
