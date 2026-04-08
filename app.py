@@ -958,13 +958,24 @@ def inject_theme(theme_mode: str) -> None:
 
         .kt-login-tagline {
           color: var(--kt-muted);
-          font-size: 1rem;
-          margin-top: 1.4rem;
-          line-height: 1.6;
+          font-size: 0.95rem;
+          margin-top: 1.2rem;
+          line-height: 1.65;
+          text-align: center;
+          border-top: 1px solid var(--kt-border);
+          padding-top: 1.1rem;
         }
 
         .kt-login-tagline strong {
           color: var(--kt-text);
+        }
+
+        /* Align form elements with the card */
+        .kt-login-shell .stForm {
+          margin-top: -0.5rem;
+        }
+        .kt-login-shell .stTextInput input {
+          text-align: center;
         }
 
         .kt-login-logo {
@@ -982,7 +993,8 @@ def inject_theme(theme_mode: str) -> None:
 
         .kt-login-sub {
           color: var(--kt-muted);
-          margin-bottom: 1.4rem;
+          margin-bottom: 0;
+          font-size: 0.95rem;
         }
 
         @media (max-width: 760px) {
@@ -1046,10 +1058,10 @@ def login_screen() -> None:
               <div class="kt-login-logo">⏱</div>
               <div class="kt-login-title">The Incident Managers Sigma Grindset Log</div>
               <div class="kt-login-sub">Enter the team password to log in</div>
-            </div>
-            <div class="kt-login-tagline">
-              Track <strong>your</strong> overtime earnings...<br>
-              and choose when to cash out those sweet, sweet on-call hours!
+              <div class="kt-login-tagline">
+                Track <strong>your</strong> overtime earnings...<br>
+                and choose when to cash out those sweet, sweet on-call hours!
+              </div>
             </div>
             """,
             unsafe_allow_html=True,
