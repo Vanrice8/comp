@@ -601,25 +601,22 @@ def parse_hhmm(value: str) -> int | None:
 
 
 def past_beredskap_periods(n: int = 52) -> list[str]:
-    """Return last n completed Thursday→Thursday on-call periods as comment strings."""
+    """Return last n completed Thursday→Thursday on-call periods, newest first."""
     today = date.today()
-    # Find most recent completed Thursday (period end)
-    days_since_thursday = (today.weekday() - 3) % 7
-    last_thursday = today - timedelta(days=days_since_thursday)
-    # If today IS Thursday, that period just ended — include it
-    if days_since_thursday == 0:
-        last_thursday = today
+    # Step back to the most recent Thursday that is strictly in the past
+    days_back = (today.weekday() - 3) % 7
+    if days_back == 0:
+        days_back = 7  # today is Thursday — last completed end was 7 days ago
+    last_completed_thursday = today - timedelta(days=days_back)
 
     periods = []
     for i in range(n):
-        period_end = last_thursday - timedelta(weeks=i)
-        period_start = period_end - timedelta(weeks=1)  # previous Thursday
-        if period_end > today:
-            continue
+        period_end   = last_completed_thursday - timedelta(weeks=i)
+        period_start = period_end - timedelta(weeks=1)
         start_str = f"{period_start.day}/{period_start.month}"
-        end_str = f"{period_end.day}/{period_end.month}"
+        end_str   = f"{period_end.day}/{period_end.month}"
         periods.append(f"Intjänat under beredskap {start_str}–{end_str}")
-    return periods
+    return periods  # already newest-first
 
 
 def member_label(row: dict) -> str:
@@ -1114,7 +1111,7 @@ def add_entry_form(active_members: list[dict]) -> None:
         return
 
     options = {member_label(row): row["id"] for row in active_members}
-    period_options = ["— Select on-call period (optional) —"] + list(reversed(past_beredskap_periods()))
+    period_options = ["— Select on-call period (optional) —"] + past_beredskap_periods()
     with st.form("entry_form", clear_on_submit=True):
         chosen_label = st.selectbox("Person", list(options.keys()))
         entry_type = st.radio("Type", ["Earned", "Used"], horizontal=True)
