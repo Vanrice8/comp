@@ -1736,10 +1736,7 @@ def render_debt_tab(active_members: list[dict]) -> None:
 
 
 def sidebar() -> None:
-    theme_options = ["🌙 Dark", "☀️ Light"]
-    theme_idx = 0 if st.session_state.get("theme_mode", "dark") == "dark" else 1
-    theme_choice = st.sidebar.radio("Theme", theme_options, index=theme_idx, horizontal=True)
-    st.session_state.theme_mode = "dark" if theme_choice == "🌙 Dark" else "light"
+    st.session_state.theme_mode = "dark"
 
     st.sidebar.markdown("### Backup")
     st.sidebar.caption("Excel file in the same format as the original sheet.")
@@ -1772,8 +1769,7 @@ def main() -> None:
         st.session_state.pending_delete_debt_id = None
     if "active_tab" not in st.session_state:
         st.session_state.active_tab = "Tracker"
-    if "theme_mode" not in st.session_state:
-        st.session_state.theme_mode = "dark"
+    st.session_state.theme_mode = "dark"
     if "komp_xlsx" not in st.session_state:
         st.session_state.komp_xlsx = None
 
