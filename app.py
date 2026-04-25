@@ -1218,9 +1218,16 @@ def inject_theme(theme_mode: str) -> None:
         <script>
         (function() {
           const fix = el => {
+            if (el.dataset.kt_pw_fixed) return;
+            el.dataset.kt_pw_fixed = '1';
             el.setAttribute('autocomplete', 'one-time-code');
             el.setAttribute('data-lpignore', 'true');
             el.setAttribute('data-form-type', 'other');
+            el.setAttribute('readonly', 'readonly');
+            const unlock = () => el.removeAttribute('readonly');
+            el.addEventListener('focus',     unlock, { once: true });
+            el.addEventListener('mousedown', unlock, { once: true });
+            el.addEventListener('touchstart',unlock, { once: true });
           };
           const apply = () => {
             document.querySelectorAll('input[type="password"]').forEach(fix);
