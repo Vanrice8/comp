@@ -1738,6 +1738,22 @@ def render_debt_tab(active_members: list[dict]) -> None:
 def sidebar() -> None:
     st.session_state.theme_mode = "dark"
 
+    st.sidebar.markdown("### Apps")
+    st.sidebar.markdown(
+        """
+        <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem">
+          <span style="font-size:0.9rem;font-weight:700;color:white">📊 Comp Tracker</span>
+          <a href="https://gitk-checker-fbboy6k4rbrapvygxbagi7.streamlit.app/#notes-and-measures"
+             target="_blank"
+             style="font-size:0.9rem;font-weight:600;color:#6ea8ff;text-decoration:none;">
+            🔍 GITK Checker ↗
+          </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown("---")
+
     st.sidebar.markdown("### Backup")
     st.sidebar.caption("Excel file in the same format as the original sheet.")
     if st.sidebar.button("Prepare Komp.xlsx", use_container_width=True):
